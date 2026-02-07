@@ -11,6 +11,7 @@ import (
 
 	pb "github.com/jtomic1/config-schema-service/proto"
 	clientv3 "go.etcd.io/etcd/client/v3"
+	"go.opentelemetry.io/otel"
 	"golang.org/x/mod/semver"
 	"google.golang.org/protobuf/types/known/timestamppb"
 	"sigs.k8s.io/yaml"
@@ -39,8 +40,12 @@ func (repo *EtcdRepository) Close() {
 	repo.client.Close()
 }
 
-func (repo *EtcdRepository) SaveConfigSchema(key string, schema string) error {
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+func (repo *EtcdRepository) SaveConfigSchema(ctx context.Context, key string, schema string) error {
+	tracer := otel.Tracer("quasar.Repository")
+	ctx, span := tracer.Start(ctx, "Repository.SaveConfigSchema")
+	defer span.End()
+
+	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	res, err := repo.client.Get(ctx, key)
 	if err != nil {
@@ -65,8 +70,12 @@ func (repo *EtcdRepository) SaveConfigSchema(key string, schema string) error {
 	return err
 }
 
-func (repo *EtcdRepository) GetConfigSchema(key string) (*pb.ConfigSchemaData, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+func (repo *EtcdRepository) GetConfigSchema(ctx context.Context, key string) (*pb.ConfigSchemaData, error) {
+	tracer := otel.Tracer("quasar.Repository")
+	ctx, span := tracer.Start(ctx, "Repository.GetConfigSchema")
+	defer span.End()
+
+	ctx, cancel := context.WithTimeout(ctx, timeout)
 	resp, err := repo.client.Get(ctx, key)
 	cancel()
 	if err != nil {
@@ -87,8 +96,12 @@ func (repo *EtcdRepository) GetConfigSchema(key string) (*pb.ConfigSchemaData, e
 	return &schemaData, nil
 }
 
-func (repo *EtcdRepository) DeleteConfigSchema(key string) error {
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+func (repo *EtcdRepository) DeleteConfigSchema(ctx context.Context, key string) error {
+	tracer := otel.Tracer("quasar.Repository")
+	ctx, span := tracer.Start(ctx, "Repository.DeleteConfigSchema")
+	defer span.End()
+
+	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	res, err := repo.client.Delete(ctx, key)
 	if err != nil {
@@ -100,8 +113,12 @@ func (repo *EtcdRepository) DeleteConfigSchema(key string) error {
 	return errors.New("No schema with key '" + key + "' found!")
 }
 
-func (repo *EtcdRepository) GetSchemasByPrefix(prefix string) ([]*pb.ConfigSchema, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+func (repo *EtcdRepository) GetSchemasByPrefix(ctx context.Context, prefix string) ([]*pb.ConfigSchema, error) {
+	tracer := otel.Tracer("quasar.Repository")
+	ctx, span := tracer.Start(ctx, "Repository.GetSchemasByPrefix")
+	defer span.End()
+
+	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	res, err := repo.client.Get(ctx, prefix, clientv3.WithPrefix())
 	if err != nil {
@@ -132,8 +149,12 @@ func (repo *EtcdRepository) GetSchemasByPrefix(prefix string) ([]*pb.ConfigSchem
 	return schemas, nil
 }
 
-func (repo *EtcdRepository) GetLatestVersionByPrefix(prefix string) (string, error) {
-	schemas, err := repo.GetSchemasByPrefix(prefix)
+func (repo *EtcdRepository) GetLatestVersionByPrefix(ctx context.Context, prefix string) (string, error) {
+	tracer := otel.Tracer("quasar.Repository")
+	ctx, span := tracer.Start(ctx, "Repository.GetLatestVersionByPrefix")
+	defer span.End()
+
+	schemas, err := repo.GetSchemasByPrefix(ctx, prefix)
 	if err != nil {
 		return "", err
 	}

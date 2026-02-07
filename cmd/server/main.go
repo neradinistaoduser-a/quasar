@@ -11,18 +11,29 @@ import (
 	"github.com/jtomic1/config-schema-service/internal/configschema"
 	"github.com/jtomic1/config-schema-service/internal/services"
 	pb "github.com/jtomic1/config-schema-service/proto"
+	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/reflection"
 )
 
 func main() {
+
+	shutdownTracing := initTracing(
+		"quasar",
+		os.Getenv("JAEGER_HOST")+":"+os.Getenv("JAEGER_GRPC_PORT"),
+	)
+	defer shutdownTracing()
+
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%s", os.Getenv("SERVER_PORT")))
 	if err != nil {
 		log.Fatalf("Failed to listen: %v", err)
 	}
 
-	grpcServer := grpc.NewServer(grpc.UnaryInterceptor(configschema.GetAuthInterceptor()))
+	grpcServer := grpc.NewServer(
+		grpc.StatsHandler(otelgrpc.NewServerHandler()),
+		grpc.UnaryInterceptor(configschema.GetAuthInterceptor()),
+	)
 
 	administrator, err := oortapi.NewAdministrationAsyncClient(os.Getenv("NATS_ADDRESS"))
 	if err != nil {

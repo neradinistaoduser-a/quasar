@@ -12,6 +12,7 @@ import (
 	"github.com/jtomic1/config-schema-service/internal/validators"
 	pb "github.com/jtomic1/config-schema-service/proto"
 	"github.com/xeipuuv/gojsonschema"
+	"go.opentelemetry.io/otel"
 	"golang.org/x/mod/semver"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
@@ -49,6 +50,10 @@ func getConfigSchemaPrefix(req ConfigSchemaRequest) string {
 }
 
 func (s *Server) SaveConfigSchema(ctx context.Context, in *pb.SaveConfigSchemaRequest) (*pb.SaveConfigSchemaResponse, error) {
+	tracer := otel.Tracer("quasar.ConfigSchemaService")
+	ctx, span := tracer.Start(ctx, "ConfigSchemaService.SaveConfigSchema")
+	defer span.End()
+
 	ctx = s.authorizer.SetOutgoingContext(ctx)
 	_, err := s.meridian.GetNamespace(ctx, &meridian_api.GetNamespaceReq{
 		OrgId: in.SchemaDetails.Organization,
@@ -76,7 +81,7 @@ func (s *Server) SaveConfigSchema(ctx context.Context, in *pb.SaveConfigSchemaRe
 	}
 	defer repoClient.Close()
 
-	latestVersion, err := repoClient.GetLatestVersionByPrefix(getConfigSchemaPrefix(in.GetSchemaDetails()))
+	latestVersion, err := repoClient.GetLatestVersionByPrefix(ctx, getConfigSchemaPrefix(in.GetSchemaDetails()))
 	if err != nil {
 		return &pb.SaveConfigSchemaResponse{
 			Status:  13,
@@ -89,7 +94,7 @@ func (s *Server) SaveConfigSchema(ctx context.Context, in *pb.SaveConfigSchemaRe
 			Message: "Provided version is not latest! Please provide a version that succeeds '" + latestVersion + "'!",
 		}, nil
 	}
-	err = repoClient.SaveConfigSchema(getConfigSchemaKey(in.GetSchemaDetails()), in.GetSchema())
+	err = repoClient.SaveConfigSchema(ctx, getConfigSchemaKey(in.GetSchemaDetails()), in.GetSchema())
 	if err != nil {
 		return &pb.SaveConfigSchemaResponse{
 			Status:  13,
@@ -118,6 +123,10 @@ func (s *Server) SaveConfigSchema(ctx context.Context, in *pb.SaveConfigSchemaRe
 }
 
 func (s *Server) GetConfigSchema(ctx context.Context, in *pb.GetConfigSchemaRequest) (*pb.GetConfigSchemaResponse, error) {
+	tracer := otel.Tracer("quasar.ConfigSchemaService")
+	ctx, span := tracer.Start(ctx, "ConfigSchemaService.GetConfigSchema")
+	defer span.End()
+
 	oortSchemaId := services.OortSchemaId(in.SchemaDetails.Organization, in.SchemaDetails.Namespace, in.SchemaDetails.SchemaName, in.SchemaDetails.Version)
 	if !s.authorizer.Authorize(ctx, services.PermSchemaGet, services.OortResSchema, oortSchemaId) {
 		return nil, fmt.Errorf("permission denied: %s", services.PermSchemaGet)
@@ -141,7 +150,7 @@ func (s *Server) GetConfigSchema(ctx context.Context, in *pb.GetConfigSchemaRequ
 	defer repoClient.Close()
 
 	key := getConfigSchemaKey(in.GetSchemaDetails())
-	schemaData, err := repoClient.GetConfigSchema(key)
+	schemaData, err := repoClient.GetConfigSchema(ctx, key)
 	if err != nil {
 		return &pb.GetConfigSchemaResponse{
 			Status:     13,
@@ -163,6 +172,10 @@ func (s *Server) GetConfigSchema(ctx context.Context, in *pb.GetConfigSchemaRequ
 }
 
 func (s *Server) DeleteConfigSchema(ctx context.Context, in *pb.DeleteConfigSchemaRequest) (*pb.DeleteConfigSchemaResponse, error) {
+	tracer := otel.Tracer("quasar.ConfigSchemaService")
+	ctx, span := tracer.Start(ctx, "ConfigSchemaService.DeleteConfigSchema")
+	defer span.End()
+
 	oortSchemaId := services.OortSchemaId(in.SchemaDetails.Organization, in.SchemaDetails.Namespace, in.SchemaDetails.SchemaName, in.SchemaDetails.Version)
 	if !s.authorizer.Authorize(ctx, services.PermSchemaDel, services.OortResSchema, oortSchemaId) {
 		return nil, fmt.Errorf("permission denied: %s", services.PermSchemaDel)
@@ -183,7 +196,7 @@ func (s *Server) DeleteConfigSchema(ctx context.Context, in *pb.DeleteConfigSche
 	}
 	defer repoClient.Close()
 
-	if err := repoClient.DeleteConfigSchema(getConfigSchemaKey(in.GetSchemaDetails())); err != nil {
+	if err := repoClient.DeleteConfigSchema(ctx, getConfigSchemaKey(in.GetSchemaDetails())); err != nil {
 		return &pb.DeleteConfigSchemaResponse{
 			Status:  3,
 			Message: err.Error(),
@@ -197,6 +210,10 @@ func (s *Server) DeleteConfigSchema(ctx context.Context, in *pb.DeleteConfigSche
 }
 
 func (s *Server) ValidateConfiguration(ctx context.Context, in *pb.ValidateConfigurationRequest) (*pb.ValidateConfigurationResponse, error) {
+	tracer := otel.Tracer("quasar.ConfigSchemaService")
+	ctx, span := tracer.Start(ctx, "ConfigSchemaService.ValidateConfiguration")
+	defer span.End()
+
 	oortSchemaId := services.OortSchemaId(in.SchemaDetails.Organization, in.SchemaDetails.Namespace, in.SchemaDetails.SchemaName, in.SchemaDetails.Version)
 	if !s.authorizer.Authorize(ctx, services.PermSchemaGet, services.OortResSchema, oortSchemaId) {
 		return nil, fmt.Errorf("permission denied: %s", services.PermSchemaGet)
@@ -220,7 +237,7 @@ func (s *Server) ValidateConfiguration(ctx context.Context, in *pb.ValidateConfi
 	defer repoClient.Close()
 
 	key := getConfigSchemaKey(in.GetSchemaDetails())
-	schemaData, err := repoClient.GetConfigSchema(key)
+	schemaData, err := repoClient.GetConfigSchema(ctx, key)
 	if err != nil {
 		return &pb.ValidateConfigurationResponse{
 			Status:  13,
@@ -276,6 +293,10 @@ func validateConfiguration(configuration string, schema string) (*gojsonschema.R
 }
 
 func (s *Server) GetConfigSchemaVersions(ctx context.Context, in *pb.ConfigSchemaVersionsRequest) (*pb.ConfigSchemaVersionsResponse, error) {
+	tracer := otel.Tracer("quasar.ConfigSchemaService")
+	ctx, span := tracer.Start(ctx, "ConfigSchemaService.GetConfigSchemaVersions")
+	defer span.End()
+
 	if !s.authorizer.Authorize(ctx, services.PermSchemaPut, services.OortResNamespace, fmt.Sprintf("%s/%s", in.SchemaDetails.Organization, in.SchemaDetails.Namespace)) {
 		return nil, fmt.Errorf("permission denied: %s", services.PermSchemaGet)
 	}
@@ -296,7 +317,7 @@ func (s *Server) GetConfigSchemaVersions(ctx context.Context, in *pb.ConfigSchem
 	defer repoClient.Close()
 
 	key := getConfigSchemaPrefix(in.GetSchemaDetails())
-	schemaVersions, err := repoClient.GetSchemasByPrefix(key)
+	schemaVersions, err := repoClient.GetSchemasByPrefix(ctx, key)
 	if err != nil {
 		return &pb.ConfigSchemaVersionsResponse{
 			Status:  13,
