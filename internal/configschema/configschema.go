@@ -101,7 +101,7 @@ func (s *Server) SaveConfigSchema(ctx context.Context, in *pb.SaveConfigSchemaRe
 			Message: err.Error(),
 		}, nil
 	}
-	err = s.administrator.SendRequest(&oortapi.CreateInheritanceRelReq{
+	err = s.administrator.SendRequest(ctx, &oortapi.CreateInheritanceRelReq{
 		From: &oortapi.Resource{
 			Id:   in.SchemaDetails.Organization,
 			Kind: services.OortResOrg,
